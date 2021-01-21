@@ -51,9 +51,6 @@ type node struct {
 type Matcher struct {
 	counter int // Counts the number of matches done, and is used to
 	// prevent output of multiple matches of the same string
-	trie []node // preallocated block of memory containing all the
-	// nodes
-	extent int   // offset into trie that is currently free
 	root   *node // Points to trie[0]
 }
 
@@ -61,7 +58,7 @@ type Matcher struct {
 // returns a pointer to the node representing the end of the blice. If
 // the blice is not found it returns nil.
 func (m *Matcher) findBlice(b []byte) *node {
-	n := &m.trie[0]
+	n := m.root
 
 	for n != nil && len(b) > 0 {
 		n = n.child[int(b[0])]
@@ -71,37 +68,19 @@ func (m *Matcher) findBlice(b []byte) *node {
 	return n
 }
 
-// getFreeNode: gets a free node structure from the Matcher's trie
-// pool and updates the extent to point to the next free node.
-func (m *Matcher) getFreeNode() *node {
-	m.extent += 1
-
-	if m.extent == 1 {
-		m.root = &m.trie[0]
-		m.root.root = true
-	}
-
-	return &m.trie[m.extent-1]
-}
-
 // buildTrie builds the fundamental trie structure from a set of
 // blices.
 func (m *Matcher) buildTrie(dictionary [][]byte) {
-
-	// Work out the maximum size for the trie (all dictionary entries
-	// are distinct plus the root). This is used to preallocate memory
-	// for it.
 
 	max := 1
 	for _, blice := range dictionary {
 		max += len(blice)
 	}
-	m.trie = make([]node, max)
 
-	// Calling this an ignoring its argument simply allocated
-	// m.trie[0] which will be the root element
+	nodes := make([]*node, 0, max)
 
-	m.getFreeNode()
+	m.root = &node{root: true}
+	nodes = append(nodes, m.root)
 
 	// This loop builds the nodes in the trie by following through
 	// each dictionary entry building the children pointers.
@@ -115,7 +94,9 @@ func (m *Matcher) buildTrie(dictionary [][]byte) {
 			c := n.child[int(b)]
 
 			if c == nil {
-				c = m.getFreeNode()
+				c = &node{}
+				nodes = append(nodes, c)
+
 				n.child[int(b)] = c
 				c.b = make([]byte, len(path))
 				copy(c.b, path)
@@ -174,18 +155,15 @@ func (m *Matcher) buildTrie(dictionary [][]byte) {
 		}
 	}
 
-	for i := 0; i < m.extent; i++ {
+	for i := 0; i < len(nodes); i++ {
 		for c := 0; c < 256; c++ {
-			n := &m.trie[i]
+			n := nodes[i]
 			for n.child[c] == nil && !n.root {
 				n = n.fail
 			}
-
-			m.trie[i].fails[c] = n
+			nodes[i].fails[c] = n
 		}
 	}
-
-	m.trie = m.trie[:m.extent]
 }
 
 // NewMatcher creates a new Matcher used to match against a set of
