@@ -19,8 +19,6 @@ const (
 
 // A node in the trie structure used to implement Aho-Corasick
 type node struct {
-	root bool // true if this is the root
-
 	b []byte // The blice at this node
 
 	output bool // True means this node represents a blice that should
@@ -99,7 +97,7 @@ func (m *Matcher) buildTrie(dictionary [][]byte) {
 
 	m.table = [][]*node{}
 
-	m.root = &node{root: true}
+	m.root = &node{}
 	m.tableSet(0, nil)
 	m.tableSet(1, m.root)
 	m.tableSize = 2
@@ -212,16 +210,19 @@ func (m *Matcher) Match(in []byte) []int {
 
 	var hits []int
 
+	ni := int32(1)
 	n := m.root
 
 	for _, b := range in {
-		if !n.root && n.getChild(b) == 0 {
+		if ni != 1 && n.getChild(b) == 0 {
+			ni = n.fail
 			n = m.tableGet(n.fail)
 		}
 
 		fi := n.getChild(b)
 		if fi != 0 {
 			f := m.tableGet(fi)
+			ni = fi
 			n = f
 
 			_, marked := marks[fi]
@@ -230,7 +231,7 @@ func (m *Matcher) Match(in []byte) []int {
 				marks[fi] = true
 			}
 
-			for !m.tableGet(f.suffix).root {
+			for f.suffix != 1 {
 				fi = f.suffix
 				f = m.tableGet(fi)
 				_, marked := marks[fi]
