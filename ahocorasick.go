@@ -68,28 +68,28 @@ func (m *Matcher) tableSet(i int32, n *node) {
 	m.table[i / TABLE_WIDTH][i % TABLE_WIDTH] = n
 }
 
-func (n *node) getChild(i int) int32 {
+func (n *node) getChild(i byte) int32 {
 	if n.child == nil {
 		return 0
 	}
 	return n.child[i]
 }
 
-func (n *node) setChild(i int, v int32) {
+func (n *node) setChild(i byte, v int32) {
 	if n.child == nil {
 		n.child = make([]int32, 256)
 	}
 	n.child[i] = v
 }
 
-func (n *node) getFails(i int) int32 {
+func (n *node) getFails(i byte) int32 {
 	if n.fails == nil {
 		return 0
 	}
 	return n.fails[i]
 }
 
-func (n *node) setFails(i int, v int32) {
+func (n *node) setFails(i byte, v int32) {
 	if n.fails == nil {
 		n.fails = make([]int32, 256)
 	}
@@ -103,7 +103,7 @@ func (m *Matcher) findBlice(b []byte) int32 {
 	i := int32(1)
 
 	for i != 0 && len(b) > 0 {
-		i = m.tableGet(i).getChild(int(b[0]))
+		i = m.tableGet(i).getChild(b[0])
 		b = b[1:]
 	}
 
@@ -130,13 +130,13 @@ func (m *Matcher) buildTrie(dictionary [][]byte) {
 		for _, b := range blice {
 			path = append(path, b)
 
-			c := m.tableGet(n.getChild(int(b)))
+			c := m.tableGet(n.getChild(b))
 
 			if c == nil {
 				c = &node{}
 				m.tableSet(m.tableSize, c)
 
-				n.setChild(int(b), m.tableSize)
+				n.setChild(b, m.tableSize)
 				m.tableSize += 1
 
 				c.b = make([]byte, len(path))
@@ -169,8 +169,8 @@ func (m *Matcher) buildTrie(dictionary [][]byte) {
 	for l.Len() > 0 {
 		n := l.Remove(l.Front()).(*node)
 
-		for i := 0; i < 256; i++ {
-			c := m.tableGet(n.getChild(i))
+		for i := 0; i <= 255; i++ {
+			c := m.tableGet(n.getChild(byte(i)))
 			if c != nil {
 				l.PushBack(c)
 
@@ -197,14 +197,14 @@ func (m *Matcher) buildTrie(dictionary [][]byte) {
 	}
 
 	for i := int32(1); i < m.tableSize; i++ {
-		for c := 0; c < 256; c++ {
+		for c := 0; c <= 255; c++ {
 			n := m.tableGet(i)
 			j := i
-			for n.getChild(c) == 0 && !n.root {
+			for n.getChild(byte(c)) == 0 && !n.root {
 				j = n.fail
 				n = m.tableGet(j)
 			}
-			m.tableGet(i).setFails(c, j)
+			m.tableGet(i).setFails(byte(c), j)
 		}
 	}
 }
@@ -244,11 +244,11 @@ func (m *Matcher) Match(in []byte) []int {
 	n := m.root
 
 	for _, b := range in {
-		if !n.root && n.getChild(int(b)) == 0 {
-			n = m.tableGet(n.getFails(int(b)))
+		if !n.root && n.getChild(b) == 0 {
+			n = m.tableGet(n.getFails(b))
 		}
 
-		fi := n.getChild(int(b))
+		fi := n.getChild(b)
 		if fi != 0 {
 			f := m.tableGet(fi)
 			n = f
