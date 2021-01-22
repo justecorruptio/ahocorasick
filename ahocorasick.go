@@ -27,9 +27,6 @@ type node struct {
 	// be output when matching
 	index int // index into original dictionary if output is true
 
-	counter int // Set to the value of the Matcher.counter when a
-	// match is output to prevent duplicate output
-
 	// The use of fixed size arrays is space-inefficient but fast for
 	// lookups.
 
@@ -54,8 +51,6 @@ type node struct {
 // Matcher is returned by NewMatcher and contains a list of blices to
 // match against
 type Matcher struct {
-	counter int // Counts the number of matches done, and is used to
-	// prevent output of multiple matches of the same string
 	root   *node // Points to trie[0]
 
 	table [][]*node
@@ -244,7 +239,8 @@ func NewStringMatcher(dictionary []string) *Matcher {
 // Match searches in for blices and returns all the blices found as
 // indexes into the original dictionary
 func (m *Matcher) Match(in []byte) []int {
-	m.counter += 1
+	marks := make(map[int32]bool)
+
 	var hits []int
 
 	n := m.root
@@ -256,20 +252,24 @@ func (m *Matcher) Match(in []byte) []int {
 			n = m.tableGet(n.getFails(c))
 		}
 
-		f := m.tableGet(n.getChild(c))
+		fi := n.getChild(c)
+		f := m.tableGet(fi)
 		if f != nil {
 			n = f
 
-			if f.output && f.counter != m.counter {
+			_, marked := marks[fi]
+			if f.output && !marked {
 				hits = append(hits, f.index)
-				f.counter = m.counter
+				marks[fi] = true
 			}
 
 			for !m.tableGet(f.suffix).root {
-				f = m.tableGet(f.suffix)
-				if f.counter != m.counter {
+				fi = f.suffix
+				f = m.tableGet(fi)
+				_, marked := marks[fi]
+				if !marked {
 					hits = append(hits, f.index)
-					f.counter = m.counter
+					marks[fi] = true
 				} else {
 
 					// There's no point working our way up the
