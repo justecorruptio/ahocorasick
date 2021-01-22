@@ -29,13 +29,13 @@ type node struct {
 	// The use of fixed size arrays is space-inefficient but fast for
 	// lookups.
 
-	child [256]*node // A non-nil entry in this array means that the
+	child []*node // A non-nil entry in this array means that the
 	// index represents a byte value which can be
 	// appended to the current node. Blices in the
 	// trie are built up byte by byte through these
 	// child node pointers.
 
-	fails [256]*node // Where to fail to (by following the fail
+	fails []*node // Where to fail to (by following the fail
 	// pointers) for each possible byte
 
 	suffix *node // Pointer to the longest possible strict suffix of
@@ -54,6 +54,34 @@ type Matcher struct {
 	root   *node // Points to trie[0]
 }
 
+func (n *node) getChild(i int) *node {
+	if n.child == nil {
+		return nil
+	}
+	return n.child[i]
+}
+
+func (n *node) setChild(i int, v *node) {
+	if n.child == nil {
+		n.child = make([]*node, 256)
+	}
+	n.child[i] = v
+}
+
+func (n *node) getFails(i int) *node {
+	if n.fails == nil {
+		return nil
+	}
+	return n.fails[i]
+}
+
+func (n *node) setFails(i int, v *node) {
+	if n.fails == nil {
+		n.fails = make([]*node, 256)
+	}
+	n.fails[i] = v
+}
+
 // finndBlice looks for a blice in the trie starting from the root and
 // returns a pointer to the node representing the end of the blice. If
 // the blice is not found it returns nil.
@@ -61,7 +89,7 @@ func (m *Matcher) findBlice(b []byte) *node {
 	n := m.root
 
 	for n != nil && len(b) > 0 {
-		n = n.child[int(b[0])]
+		n = n.getChild(int(b[0]))
 		b = b[1:]
 	}
 
@@ -91,13 +119,13 @@ func (m *Matcher) buildTrie(dictionary [][]byte) {
 		for _, b := range blice {
 			path = append(path, b)
 
-			c := n.child[int(b)]
+			c := n.getChild(int(b))
 
 			if c == nil {
 				c = &node{}
 				nodes = append(nodes, c)
 
-				n.child[int(b)] = c
+				n.setChild(int(b), c)
 				c.b = make([]byte, len(path))
 				copy(c.b, path)
 
@@ -129,7 +157,7 @@ func (m *Matcher) buildTrie(dictionary [][]byte) {
 		n := l.Remove(l.Front()).(*node)
 
 		for i := 0; i < 256; i++ {
-			c := n.child[i]
+			c := n.getChild(i)
 			if c != nil {
 				l.PushBack(c)
 
@@ -158,10 +186,10 @@ func (m *Matcher) buildTrie(dictionary [][]byte) {
 	for i := 0; i < len(nodes); i++ {
 		for c := 0; c < 256; c++ {
 			n := nodes[i]
-			for n.child[c] == nil && !n.root {
+			for n.getChild(c) == nil && !n.root {
 				n = n.fail
 			}
-			nodes[i].fails[c] = n
+			nodes[i].setFails(c, n)
 		}
 	}
 }
@@ -202,12 +230,12 @@ func (m *Matcher) Match(in []byte) []int {
 	for _, b := range in {
 		c := int(b)
 
-		if !n.root && n.child[c] == nil {
-			n = n.fails[c]
+		if !n.root && n.getChild(c) == nil {
+			n = n.getFails(c)
 		}
 
-		if n.child[c] != nil {
-			f := n.child[c]
+		f := n.getChild(c)
+		if f != nil {
 			n = f
 
 			if f.output && f.counter != m.counter {
