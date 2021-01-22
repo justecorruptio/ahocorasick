@@ -100,12 +100,10 @@ func (n *node) setFails(i int, v int32) {
 // returns a pointer to the node representing the end of the blice. If
 // the blice is not found it returns nil.
 func (m *Matcher) findBlice(b []byte) int32 {
-	n := m.root
 	i := int32(1)
 
-	for n != nil && len(b) > 0 {
-		i = n.getChild(int(b[0]))
-		n = m.tableGet(i)
+	for i != 0 && len(b) > 0 {
+		i = m.tableGet(i).getChild(int(b[0]))
 		b = b[1:]
 	}
 
@@ -246,15 +244,13 @@ func (m *Matcher) Match(in []byte) []int {
 	n := m.root
 
 	for _, b := range in {
-		c := int(b)
-
-		if !n.root && m.tableGet(n.getChild(c)) == nil {
-			n = m.tableGet(n.getFails(c))
+		if !n.root && n.getChild(int(b)) == 0 {
+			n = m.tableGet(n.getFails(int(b)))
 		}
 
-		fi := n.getChild(c)
-		f := m.tableGet(fi)
-		if f != nil {
+		fi := n.getChild(int(b))
+		if fi != 0 {
+			f := m.tableGet(fi)
 			n = f
 
 			_, marked := marks[fi]
