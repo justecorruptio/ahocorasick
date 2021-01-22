@@ -36,9 +36,6 @@ type node struct {
 	// trie are built up byte by byte through these
 	// child node pointers.
 
-	fails []int32 // Where to fail to (by following the fail
-	// pointers) for each possible byte
-
 	suffix int32 // Pointer to the longest possible strict suffix of
 	// this node
 
@@ -80,20 +77,6 @@ func (n *node) setChild(i byte, v int32) {
 		n.child = make([]int32, 256)
 	}
 	n.child[i] = v
-}
-
-func (n *node) getFails(i byte) int32 {
-	if n.fails == nil {
-		return 0
-	}
-	return n.fails[i]
-}
-
-func (n *node) setFails(i byte, v int32) {
-	if n.fails == nil {
-		n.fails = make([]int32, 256)
-	}
-	n.fails[i] = v
 }
 
 // finndBlice looks for a blice in the trie starting from the root and
@@ -195,18 +178,6 @@ func (m *Matcher) buildTrie(dictionary [][]byte) {
 			}
 		}
 	}
-
-	for i := int32(1); i < m.tableSize; i++ {
-		for c := 0; c <= 255; c++ {
-			n := m.tableGet(i)
-			j := i
-			for n.getChild(byte(c)) == 0 && !n.root {
-				j = n.fail
-				n = m.tableGet(j)
-			}
-			m.tableGet(i).setFails(byte(c), j)
-		}
-	}
 }
 
 // NewMatcher creates a new Matcher used to match against a set of
@@ -245,7 +216,7 @@ func (m *Matcher) Match(in []byte) []int {
 
 	for _, b := range in {
 		if !n.root && n.getChild(b) == 0 {
-			n = m.tableGet(n.getFails(b))
+			n = m.tableGet(n.fail)
 		}
 
 		fi := n.getChild(b)
