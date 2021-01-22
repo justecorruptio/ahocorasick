@@ -13,6 +13,10 @@ import (
 	"container/list"
 )
 
+const (
+	NODES_WIDTH = 1024
+)
+
 // A node in the trie structure used to implement Aho-Corasick
 type node struct {
 	root bool // true if this is the root
@@ -105,10 +109,15 @@ func (m *Matcher) buildTrie(dictionary [][]byte) {
 		max += len(blice)
 	}
 
-	nodes := make([]*node, 0, max)
+	nodes := make([][]*node, max / NODES_WIDTH + 1)
+	for i := 0; i < max / NODES_WIDTH + 1; i++ {
+		nodes[i] = make([]*node, NODES_WIDTH)
+	}
 
 	m.root = &node{root: true}
-	nodes = append(nodes, m.root)
+	nodes[0][0] = m.root
+	nodes_counter := 1
+
 
 	// This loop builds the nodes in the trie by following through
 	// each dictionary entry building the children pointers.
@@ -123,7 +132,8 @@ func (m *Matcher) buildTrie(dictionary [][]byte) {
 
 			if c == nil {
 				c = &node{}
-				nodes = append(nodes, c)
+				nodes[nodes_counter / NODES_WIDTH][nodes_counter % NODES_WIDTH] = c
+				nodes_counter += 1
 
 				n.setChild(int(b), c)
 				c.b = make([]byte, len(path))
@@ -183,13 +193,13 @@ func (m *Matcher) buildTrie(dictionary [][]byte) {
 		}
 	}
 
-	for i := 0; i < len(nodes); i++ {
+	for i := 0; i < nodes_counter; i++ {
 		for c := 0; c < 256; c++ {
-			n := nodes[i]
+			n := nodes[i / NODES_WIDTH][i % NODES_WIDTH]
 			for n.getChild(c) == nil && !n.root {
 				n = n.fail
 			}
-			nodes[i].setFails(c, n)
+			nodes[i / NODES_WIDTH][i % NODES_WIDTH].setFails(c, n)
 		}
 	}
 }
