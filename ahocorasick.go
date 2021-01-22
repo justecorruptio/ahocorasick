@@ -104,7 +104,7 @@ func (n *node) setFails(i int, v int32) {
 // finndBlice looks for a blice in the trie starting from the root and
 // returns a pointer to the node representing the end of the blice. If
 // the blice is not found it returns nil.
-func (m *Matcher) findBlice(b []byte) (*node, int32) {
+func (m *Matcher) findBlice(b []byte) int32 {
 	n := m.root
 	i := int32(1)
 
@@ -114,7 +114,7 @@ func (m *Matcher) findBlice(b []byte) (*node, int32) {
 		b = b[1:]
 	}
 
-	return n, i
+	return i
 }
 
 // buildTrie builds the fundamental trie structure from a set of
@@ -182,19 +182,19 @@ func (m *Matcher) buildTrie(dictionary [][]byte) {
 				l.PushBack(c)
 
 				for j := 1; j < len(c.b); j++ {
-					_, c.fail = m.findBlice(c.b[j:])
-					if m.tableGet(c.fail) != nil {
+					c.fail = m.findBlice(c.b[j:])
+					if c.fail != 0 {
 						break
 					}
 				}
 
-				if m.tableGet(c.fail) == nil {
+				if c.fail == 0 {
 					c.fail = 1
 				}
 
 				for j := 1; j < len(c.b); j++ {
-					s, si := m.findBlice(c.b[j:])
-					if s != nil && s.output {
+					si := m.findBlice(c.b[j:])
+					if si != 0 && m.tableGet(si).output {
 						c.suffix = si
 						break
 					}
@@ -207,7 +207,7 @@ func (m *Matcher) buildTrie(dictionary [][]byte) {
 		for c := 0; c < 256; c++ {
 			n := m.tableGet(i)
 			j := i
-			for m.tableGet(n.getChild(c)) == nil && !n.root {
+			for n.getChild(c) == 0 && !n.root {
 				j = n.fail
 				n = m.tableGet(j)
 			}
