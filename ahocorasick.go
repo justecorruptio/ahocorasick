@@ -9,10 +9,6 @@
 
 package ahocorasick
 
-import (
-	"container/list"
-)
-
 const (
 	TABLE_WIDTH = 1024
 )
@@ -144,16 +140,16 @@ func (m *Matcher) buildTrie(dictionary [][]byte) {
 		n.index = i
 	}
 
-	l := new(list.List)
-	l.PushBack(m.root)
+	stack := []*node{m.root}
 
-	for l.Len() > 0 {
-		n := l.Remove(l.Front()).(*node)
+	for len(stack) > 0 {
+		n := stack[len(stack) - 1]
+		stack = stack[: len(stack) - 1]
 
 		for i := 0; i <= 255; i++ {
 			c := m.tableGet(n.getChild(byte(i)))
 			if c != nil {
-				l.PushBack(c)
+				stack = append(stack, c)
 
 				for j := 1; j < len(c.b); j++ {
 					c.fail = m.findBlice(c.b[j:])
