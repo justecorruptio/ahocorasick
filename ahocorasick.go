@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	NODES_WIDTH = 1024
+	TABLE_WIDTH = 1024
 )
 
 // A node in the trie structure used to implement Aho-Corasick
@@ -33,21 +33,22 @@ type node struct {
 	// The use of fixed size arrays is space-inefficient but fast for
 	// lookups.
 
-	child []*node // A non-nil entry in this array means that the
+	child []int32 // A non-nil entry in this array means that the
 	// index represents a byte value which can be
 	// appended to the current node. Blices in the
 	// trie are built up byte by byte through these
 	// child node pointers.
 
-	fails []*node // Where to fail to (by following the fail
+	fails []int32 // Where to fail to (by following the fail
 	// pointers) for each possible byte
 
-	suffix *node // Pointer to the longest possible strict suffix of
+	suffix int32 // Pointer to the longest possible strict suffix of
 	// this node
 
-	fail *node // Pointer to the next node which is in the dictionary
+	fail int32 // Pointer to the next node which is in the dictionary
 	// which can be reached from here following suffixes. Called fail
 	// because it is used to fallback in the trie when a match fails.
+
 }
 
 // Matcher is returned by NewMatcher and contains a list of blices to
@@ -56,32 +57,43 @@ type Matcher struct {
 	counter int // Counts the number of matches done, and is used to
 	// prevent output of multiple matches of the same string
 	root   *node // Points to trie[0]
+
+	table [][]*node
+	tableSize int32
 }
 
-func (n *node) getChild(i int) *node {
+func (m *Matcher) tableGet(i int32) *node {
+	return m.table[i / TABLE_WIDTH][i % TABLE_WIDTH]
+}
+
+func (m *Matcher) tableSet(i int32, n *node) {
+	m.table[i / TABLE_WIDTH][i % TABLE_WIDTH] = n
+}
+
+func (n *node) getChild(i int) int32 {
 	if n.child == nil {
-		return nil
+		return 0
 	}
 	return n.child[i]
 }
 
-func (n *node) setChild(i int, v *node) {
+func (n *node) setChild(i int, v int32) {
 	if n.child == nil {
-		n.child = make([]*node, 256)
+		n.child = make([]int32, 256)
 	}
 	n.child[i] = v
 }
 
-func (n *node) getFails(i int) *node {
+func (n *node) getFails(i int) int32 {
 	if n.fails == nil {
-		return nil
+		return 0
 	}
 	return n.fails[i]
 }
 
-func (n *node) setFails(i int, v *node) {
+func (n *node) setFails(i int, v int32) {
 	if n.fails == nil {
-		n.fails = make([]*node, 256)
+		n.fails = make([]int32, 256)
 	}
 	n.fails[i] = v
 }
@@ -89,35 +101,37 @@ func (n *node) setFails(i int, v *node) {
 // finndBlice looks for a blice in the trie starting from the root and
 // returns a pointer to the node representing the end of the blice. If
 // the blice is not found it returns nil.
-func (m *Matcher) findBlice(b []byte) *node {
+func (m *Matcher) findBlice(b []byte) (*node, int32) {
 	n := m.root
+	i := int32(1)
 
 	for n != nil && len(b) > 0 {
-		n = n.getChild(int(b[0]))
+		i = n.getChild(int(b[0]))
+		n = m.tableGet(i)
 		b = b[1:]
 	}
 
-	return n
+	return n, i
 }
 
 // buildTrie builds the fundamental trie structure from a set of
 // blices.
 func (m *Matcher) buildTrie(dictionary [][]byte) {
 
-	max := 1
+	max := 2
 	for _, blice := range dictionary {
 		max += len(blice)
 	}
 
-	nodes := make([][]*node, max / NODES_WIDTH + 1)
-	for i := 0; i < max / NODES_WIDTH + 1; i++ {
-		nodes[i] = make([]*node, NODES_WIDTH)
+	m.table = make([][]*node, max / TABLE_WIDTH + 1)
+	for i := 0; i < max / TABLE_WIDTH + 1; i++ {
+		m.table[i] = make([]*node, TABLE_WIDTH)
 	}
 
 	m.root = &node{root: true}
-	nodes[0][0] = m.root
-	nodes_counter := 1
-
+	m.tableSet(0, nil)
+	m.tableSet(1, m.root)
+	m.tableSize = 2
 
 	// This loop builds the nodes in the trie by following through
 	// each dictionary entry building the children pointers.
@@ -128,14 +142,15 @@ func (m *Matcher) buildTrie(dictionary [][]byte) {
 		for _, b := range blice {
 			path = append(path, b)
 
-			c := n.getChild(int(b))
+			c := m.tableGet(n.getChild(int(b)))
 
 			if c == nil {
 				c = &node{}
-				nodes[nodes_counter / NODES_WIDTH][nodes_counter % NODES_WIDTH] = c
-				nodes_counter += 1
+				m.tableSet(m.tableSize, c)
 
-				n.setChild(int(b), c)
+				n.setChild(int(b), m.tableSize)
+				m.tableSize += 1
+
 				c.b = make([]byte, len(path))
 				copy(c.b, path)
 
@@ -144,10 +159,10 @@ func (m *Matcher) buildTrie(dictionary [][]byte) {
 				// possible.
 
 				if len(path) == 1 {
-					c.fail = m.root
+					c.fail = 1
 				}
 
-				c.suffix = m.root
+				c.suffix = 1
 			}
 
 			n = c
@@ -167,25 +182,25 @@ func (m *Matcher) buildTrie(dictionary [][]byte) {
 		n := l.Remove(l.Front()).(*node)
 
 		for i := 0; i < 256; i++ {
-			c := n.getChild(i)
+			c := m.tableGet(n.getChild(i))
 			if c != nil {
 				l.PushBack(c)
 
 				for j := 1; j < len(c.b); j++ {
-					c.fail = m.findBlice(c.b[j:])
-					if c.fail != nil {
+					_, c.fail = m.findBlice(c.b[j:])
+					if m.tableGet(c.fail) != nil {
 						break
 					}
 				}
 
-				if c.fail == nil {
-					c.fail = m.root
+				if m.tableGet(c.fail) == nil {
+					c.fail = 1
 				}
 
 				for j := 1; j < len(c.b); j++ {
-					s := m.findBlice(c.b[j:])
+					s, si := m.findBlice(c.b[j:])
 					if s != nil && s.output {
-						c.suffix = s
+						c.suffix = si
 						break
 					}
 				}
@@ -193,13 +208,15 @@ func (m *Matcher) buildTrie(dictionary [][]byte) {
 		}
 	}
 
-	for i := 0; i < nodes_counter; i++ {
+	for i := int32(1); i < m.tableSize; i++ {
 		for c := 0; c < 256; c++ {
-			n := nodes[i / NODES_WIDTH][i % NODES_WIDTH]
-			for n.getChild(c) == nil && !n.root {
-				n = n.fail
+			n := m.tableGet(i)
+			j := i
+			for m.tableGet(n.getChild(c)) == nil && !n.root {
+				j = n.fail
+				n = m.tableGet(j)
 			}
-			nodes[i / NODES_WIDTH][i % NODES_WIDTH].setFails(c, n)
+			m.tableGet(i).setFails(c, j)
 		}
 	}
 }
@@ -240,11 +257,11 @@ func (m *Matcher) Match(in []byte) []int {
 	for _, b := range in {
 		c := int(b)
 
-		if !n.root && n.getChild(c) == nil {
-			n = n.getFails(c)
+		if !n.root && m.tableGet(n.getChild(c)) == nil {
+			n = m.tableGet(n.getFails(c))
 		}
 
-		f := n.getChild(c)
+		f := m.tableGet(n.getChild(c))
 		if f != nil {
 			n = f
 
@@ -253,8 +270,8 @@ func (m *Matcher) Match(in []byte) []int {
 				f.counter = m.counter
 			}
 
-			for !f.suffix.root {
-				f = f.suffix
+			for !m.tableGet(f.suffix).root {
+				f = m.tableGet(f.suffix)
 				if f.counter != m.counter {
 					hits = append(hits, f.index)
 					f.counter = m.counter
