@@ -67,6 +67,9 @@ func (m *Matcher) tableGet(i int32) *node {
 }
 
 func (m *Matcher) tableSet(i int32, n *node) {
+	if i / TABLE_WIDTH >= int32(len(m.table)) {
+		m.table = append(m.table, make([]*node, TABLE_WIDTH))
+	}
 	m.table[i / TABLE_WIDTH][i % TABLE_WIDTH] = n
 }
 
@@ -118,15 +121,7 @@ func (m *Matcher) findBlice(b []byte) (*node, int32) {
 // blices.
 func (m *Matcher) buildTrie(dictionary [][]byte) {
 
-	max := 2
-	for _, blice := range dictionary {
-		max += len(blice)
-	}
-
-	m.table = make([][]*node, max / TABLE_WIDTH + 1)
-	for i := 0; i < max / TABLE_WIDTH + 1; i++ {
-		m.table[i] = make([]*node, TABLE_WIDTH)
-	}
+	m.table = [][]*node{}
 
 	m.root = &node{root: true}
 	m.tableSet(0, nil)
