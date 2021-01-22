@@ -1,3 +1,3 @@
-module github.com/cloudflare/ahocorasick
+module github.com/justecorruptio/ahocorasick
 
 go 1.15
