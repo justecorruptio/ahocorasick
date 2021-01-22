@@ -76,14 +76,15 @@ func (n *node) setChild(i byte, v int32) {
 // finndBlice looks for a blice in the trie starting from the root and
 // returns a pointer to the node representing the end of the blice. If
 // the blice is not found it returns nil.
-func (m *Matcher) findBlice(b []byte) int32 {
+func (m *Matcher) findBlice(blice []byte) int32 {
 	i := int32(1)
 
-	for i != 0 && len(b) > 0 {
-		i = m.tableGet(i).getChild(b[0])
-		b = b[1:]
+	for _, b := range blice {
+		i = m.tableGet(i).getChild(b)
+		if i == 0 {
+			break
+		}
 	}
-
 	return i
 }
 
@@ -147,8 +148,9 @@ func (m *Matcher) buildTrie(dictionary [][]byte) {
 		stack = stack[: len(stack) - 1]
 
 		for i := 0; i <= 255; i++ {
-			c := m.tableGet(n.getChild(byte(i)))
-			if c != nil {
+			ci := n.getChild(byte(i))
+			if ci != 0 {
+				c := m.tableGet(ci)
 				stack = append(stack, c)
 
 				for j := 1; j < len(c.b); j++ {
